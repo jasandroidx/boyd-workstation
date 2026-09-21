@@ -62,6 +62,7 @@ RECOMMENDED = {
     "chat": ("qwen3:4b", "Best general chat quality that still fits RAM"),
     "npc": ("phi4-mini:latest", "Short character lines; light and snappy"),
     "code": ("qwen2.5:7b-instruct", "Best coding model on this VM"),
+    "brain": ("qwen3:4b", "Best local expand — short prompt → ultra-detailed"),
 }
 
 
@@ -723,6 +724,40 @@ def code_respond(message, history, model):
     yield from stream_reply(message, history, model, CODE_SYSTEM)
 
 
+BRAIN_SYSTEM = (
+    "You are a prompt enhancer like the brain/expand button on Perchance image generators. "
+    "The user gives a short rough idea. You rewrite it into ONE ultra-detailed image-generation prompt "
+    "(Stable Diffusion / photoreal style): subject, body, clothing or lack of it, pose, camera/POV, "
+    "lighting, setting, mood, materials, quality tags. Adult subjects only (18+). "
+    "Keep their intent and heat level — if they ask filthy, stay filthy; if soft, stay soft. "
+    "Output ONLY the expanded prompt as a single paragraph (or comma-separated tags). "
+    "No preamble, no quotes, no negatives section unless they asked for negatives."
+)
+
+BRAIN_NEG_HINT = (
+    "Also append a second block starting with NEGATIVE: "
+    "common quality/anatomy/age negatives (blurry, bad hands, child, loli, teen, young, anime if photoreal)."
+)
+
+
+def brain_enhance(short: str, model: str, with_negatives: bool):
+    """Stream an expanded Perchance-style prompt from a short idea."""
+    short = (short or "").strip()
+    if not short:
+        yield "Type a short idea first (like Perchance before you hit the brain)."
+        return
+    system = BRAIN_SYSTEM
+    if with_negatives:
+        system = BRAIN_SYSTEM + " " + BRAIN_NEG_HINT
+    user = f"Expand this into a super-detailed image prompt:\n\n{short}"
+    buf = ""
+    for partial in ollama_chat(model, system, [{"role": "user", "content": user}], stream=True):
+        buf = partial
+        yield buf
+
+
+
+
 # ---------------------------------------------------------------------------
 # Real Ravenstack MCP (streamable-HTTP over Funnel HTTPS)
 # ---------------------------------------------------------------------------
@@ -900,7 +935,7 @@ def build() -> gr.Blocks:
             gr.Markdown(
                 """
 # Boyd Workstation
-<div class="panel-note">Local Ollama gym · Chat / NPC / Code · Ops/MCP · Skill Hunter (ClawHub, no install) · v2.2 · per-tab ★ recommended models</div>
+<div class="panel-note">Local Ollama gym · Chat / NPC / Code · Ops/MCP · Skill Hunter (ClawHub, no install) · v2.3 · Prompt Brain (Perchance-style enhance)</div>
 """
             )
         with gr.Row(elem_id="link-bar"):
@@ -1047,6 +1082,40 @@ Read-only allowlist only. Does <strong>not</strong> call <code>sitrep</code> /
                 btn_vault.click(mcp_vault_read, inputs=vault_path, outputs=ops_out)
                 btn_kq.click(mcp_knowledge_query, inputs=kq, outputs=ops_out)
 
+            with gr.Tab("🧠 Prompt Brain"):
+                gr.Markdown(
+                    '<p class="panel-note">Like Perchance’s brain icon — short idea → ultra-detailed image prompt. '
+                    "Local Ollama only (no cloud). Paste the result into Filth Blast / art-ig / any SD UI.</p>"
+                )
+                gr.HTML(recommended_note("brain"))
+                brain_model = gr.Dropdown(
+                    choices=model_dropdown_choices("brain"),
+                    value=recommended_value("brain"),
+                    label="Model",
+                )
+                brain_in = gr.Textbox(
+                    label="Short idea",
+                    lines=3,
+                    placeholder="e.g. Sonya on her knees POV deepthroat hate glare locker…",
+                )
+                brain_neg = gr.Checkbox(label="Also write a NEGATIVE: block", value=True)
+                btn_brain = gr.Button("🧠 Enhance prompt", variant="primary")
+                brain_out = gr.Textbox(
+                    label="Expanded prompt (copy/paste)",
+                    lines=14,
+                    max_lines=28,
+                )
+                btn_brain.click(
+                    brain_enhance,
+                    inputs=[brain_in, brain_model, brain_neg],
+                    outputs=brain_out,
+                )
+                brain_in.submit(
+                    brain_enhance,
+                    inputs=[brain_in, brain_model, brain_neg],
+                    outputs=brain_out,
+                )
+
             with gr.Tab("Skill Hunter"):
                 gr.Markdown(
                     f"""
@@ -1098,7 +1167,7 @@ No OpenCode. Shortlist file: <code>{SHORTLIST_PATH}</code>.
                 btn_export.click(skill_export_handoff, outputs=hunt_out)
 
         gr.Markdown(
-            '<p class="panel-note">v2.2 · per-tab recommended models · Ops MCP + Skill Hunter (ClawHub hunt/shortlist/export, no install) · no fake dispatch.</p>'
+            '<p class="panel-note">v2.3 · Prompt Brain + per-tab ★ models · Ops MCP + Skill Hunter (ClawHub hunt/shortlist/export, no install) · no fake dispatch.</p>'
         )
 
     return demo
