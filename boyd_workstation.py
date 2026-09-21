@@ -594,6 +594,11 @@ CSS = """
   font-size: 0.9rem;
 }
 #link-bar a:hover { text-decoration: underline; }
+#link-bar a:focus-visible {
+  outline: 2px solid #3dffa8;
+  outline-offset: 2px;
+  border-radius: 2px;
+}
 .panel-note {
   opacity: 0.75;
   font-size: 0.85rem;
@@ -961,7 +966,12 @@ def build() -> gr.Blocks:
                     label="Model",
                 )
                 chat = gr.Chatbot(height=420, label="Chat", layout="bubble")
-                chat_in = gr.Textbox(placeholder="Ask anything…", show_label=False, submit_btn="Send")
+                chat_in = gr.Textbox(
+                    label="Chat message",
+                    placeholder="Ask anything…",
+                    show_label=False,
+                    submit_btn="Send",
+                )
                 chat_in.submit(chat_respond, [chat_in, chat, chat_model], [chat]).then(
                     lambda: "", None, chat_in
                 )
@@ -983,6 +993,7 @@ def build() -> gr.Blocks:
                 )
                 npc = gr.Chatbot(height=380, label="NPC", layout="bubble")
                 npc_in = gr.Textbox(
+                    label="NPC message",
                     placeholder="Say something in-world, or ask for one ambient line…",
                     show_label=False,
                     submit_btn="Send",
@@ -1003,6 +1014,7 @@ def build() -> gr.Blocks:
                 )
                 code = gr.Chatbot(height=420, label="Code", layout="bubble")
                 code_in = gr.Textbox(
+                    label="Code snippet or prompt",
                     placeholder="Paste code or ask a coding question…",
                     lines=3,
                     show_label=False,
@@ -1051,7 +1063,7 @@ Read-only allowlist only. Does <strong>not</strong> call <code>sitrep</code> /
                 gr.Markdown('<p class="panel-note">Vault read (real <code>read_vault_file</code>)</p>')
                 vault_path = gr.Textbox(
                     value="Ravenstack/RAVENSTACK-OCULAI.md",
-                    label="Vault relative_path",
+                    label="Vault relative path",
                     placeholder="Ravenstack/RAVENSTACK-OCULAI.md",
                 )
                 btn_vault = gr.Button("Read vault file", variant="primary")
@@ -1059,6 +1071,7 @@ Read-only allowlist only. Does <strong>not</strong> call <code>sitrep</code> /
                 gr.Markdown('<p class="panel-note">Knowledge search (real <code>query_knowledge</code>)</p>')
                 with gr.Row():
                     kq = gr.Textbox(
+                        label="Knowledge search query",
                         placeholder="e.g. fortress topology OR MCP Funnel",
                         show_label=False,
                         scale=4,
@@ -1080,7 +1093,9 @@ Read-only allowlist only. Does <strong>not</strong> call <code>sitrep</code> /
                 btn_pub.click(lambda: mcp_allowlisted("public_mcp_url"), outputs=ops_out)
                 btn_topics.click(lambda: mcp_allowlisted("list_knowledge_topics"), outputs=ops_out)
                 btn_vault.click(mcp_vault_read, inputs=vault_path, outputs=ops_out)
+                vault_path.submit(mcp_vault_read, inputs=vault_path, outputs=ops_out)
                 btn_kq.click(mcp_knowledge_query, inputs=kq, outputs=ops_out)
+                kq.submit(mcp_knowledge_query, inputs=kq, outputs=ops_out)
 
             with gr.Tab("🧠 Prompt Brain"):
                 gr.Markdown(
@@ -1129,6 +1144,7 @@ No OpenCode. Shortlist file: <code>{SHORTLIST_PATH}</code>.
                 hunt_out = gr.Markdown(value="_Hunt or Trending to start._")
                 with gr.Row():
                     hunt_q = gr.Textbox(
+                        label="Skill hunt query",
                         placeholder="e.g. calendar · vault memory · private web search",
                         show_label=False,
                         scale=4,
@@ -1161,6 +1177,7 @@ No OpenCode. Shortlist file: <code>{SHORTLIST_PATH}</code>.
                 hunt_q.submit(skill_hunt, inputs=[hunt_q, hunt_limit], outputs=hunt_out)
                 btn_trend.click(skill_trending, inputs=[hunt_limit], outputs=hunt_out)
                 btn_inspect.click(skill_inspect, inputs=skill_ref, outputs=hunt_out)
+                skill_ref.submit(skill_inspect, inputs=skill_ref, outputs=hunt_out)
                 btn_add.click(shortlist_add, inputs=[skill_ref, skill_note], outputs=short_out)
                 btn_rm.click(shortlist_remove, inputs=skill_ref, outputs=short_out)
                 btn_list.click(shortlist_show, outputs=short_out)
