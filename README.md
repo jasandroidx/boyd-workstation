@@ -4,6 +4,10 @@ Local Gradio shell for Jason Boyd’s Grok Bot VM: **Chat / NPC / Code / Ops·MC
 
 Runs against **local Ollama** (no cloud chat quota). Ops talks to a ReClaw/Ravenstack MCP URL you configure. Skill Hunter searches [ClawHub](https://clawhub.ai) and **never auto-installs**.
 
+## Start here if chat is dead
+
+Read **[docs/SURVIVAL.md](docs/SURVIVAL.md)** — URLs, restore steps, tab map, next builds.
+
 ## Why this repo exists
 
 The live copy historically lived under `/workspace/ingest/gradio/` on the Grok Bot VM. That path can vanish on a computer reset. **This GitHub repo is the source of truth** — clone it back onto the VM (or anywhere with Tailscale + Ollama).
