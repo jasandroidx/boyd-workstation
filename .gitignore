@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.env
+.env.*
+!.env.example
+skill-hunter-shortlist.json
+data/
+shots/
+*.bak*
+.DS_Store
