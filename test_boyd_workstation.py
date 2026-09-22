@@ -44,6 +44,7 @@ def test_textbox_labels_and_events():
 
 def test_fetch_ollama_tags_success():
     """Test fetching model tags from simulated Ollama /api/tags endpoint."""
+    boyd_workstation.fetch_ollama_tags.cache_clear()
     mock_payload = json.dumps({
         "models": [
             {"name": "deepseek-coder:6.7b"},
@@ -65,9 +66,38 @@ def test_fetch_ollama_tags_success():
 
 def test_fetch_ollama_tags_fallback():
     """Test fallback to default models if Ollama /api/tags is unreachable."""
+    boyd_workstation.fetch_ollama_tags.cache_clear()
     with patch("urllib.request.urlopen", side_effect=Exception("Connection refused")):
         tags = boyd_workstation.fetch_ollama_tags()
         assert tags == boyd_workstation.DEFAULT_MODELS
+
+
+def test_fetch_ollama_tags_caching():
+    """Verify that fetch_ollama_tags caches results and refresh_model_choices clears cache."""
+    boyd_workstation.fetch_ollama_tags.cache_clear()
+    mock_payload = json.dumps({
+        "models": [{"name": "cached-model:latest"}]
+    }).encode("utf-8")
+
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = mock_payload
+    mock_resp.__enter__.return_value = mock_resp
+
+    with patch("urllib.request.urlopen", return_value=mock_resp) as mock_urlopen:
+        # First call fetches via urlopen
+        tags1 = boyd_workstation.fetch_ollama_tags()
+        assert "cached-model:latest" in tags1
+        assert mock_urlopen.call_count == 1
+
+        # Second call uses cache (urlopen not called again)
+        tags2 = boyd_workstation.fetch_ollama_tags()
+        assert tags2 == tags1
+        assert mock_urlopen.call_count == 1
+
+        # Refreshing choices clears cache and re-queries urlopen
+        dropdown = boyd_workstation.refresh_model_choices("chat")
+        assert isinstance(dropdown, gr.Dropdown)
+        assert mock_urlopen.call_count == 2
 
 
 def test_model_dropdown_choices_and_refresh():
