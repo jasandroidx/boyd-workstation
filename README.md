@@ -1,6 +1,6 @@
 # Boyd Workstation
 
-Local Gradio shell for Jason Boyd’s Grok Bot VM: **Chat / NPC / Code / Ops·MCP / Skill Hunter**.
+Local Gradio shell for Jason Boyd’s Grok Bot VM: **Chat / NPC / Code / Ops·MCP / Prompt Brain / Outbox Viewer / Skill Hunter**.
 
 Runs against **local Ollama** (no cloud chat quota). Ops talks to a ReClaw/Ravenstack MCP URL you configure. Skill Hunter searches [ClawHub](https://clawhub.ai) and **never auto-installs**.
 
@@ -42,11 +42,22 @@ tailscale serve --bg 7860
 
 | Tab | Uses | Notes |
 |-----|------|--------|
-| Chat | Local Ollama | ★ recommended: `qwen3:4b` |
-| NPC | Local Ollama | ★ recommended: `phi4-mini:latest` |
-| Code | Local Ollama | ★ recommended: `qwen2.5:7b-instruct` |
-| Ops / MCP | MCP HTTPS | Read-only allowlist; set `MCP_URL` |
+| Chat | Local Ollama | ★ recommended: `qwen3:4b` · Dynamic model discovery, Quick Presets & Advanced LLM controls |
+| NPC | Local Ollama | ★ recommended: `phi4-mini:latest` · Dynamic model discovery & Custom voice overrides |
+| Code | Local Ollama | ★ recommended: `qwen2.5:7b-instruct` · Coding presets, Low-temp controls & Outbox Export |
+| Ops / MCP | MCP HTTPS | Read-only allowlist; set `MCP_URL` · Vault shortcuts, Latency counter & Output Export |
+| Prompt Brain | Local Ollama | Perchance-style image prompt expander · Visual style presets, Negative templates & Outbox Export |
+| Outbox Viewer | File system | Browse, preview, refresh, and delete exported markdown sessions/prompts |
 | Skill Hunter | ClawHub public API | Hunt / shortlist / export — **no install** |
+
+## Features & Additions
+
+- **🔄 Live Ollama Model Discovery:** Click *Refresh Models* in Chat, NPC, Code, or Prompt Brain tabs to dynamically query local Ollama (`/api/tags`) and list any pulled model.
+- **⚙️ Advanced LLM Controls:** Expandable controls for Temperature, Context Window (`num_ctx`), and Custom System Prompt Overrides in Chat, NPC, and Code tabs.
+- **⚡ Quick Prompt & Coding Presets:** Select preset templates for common coding workflows (Pytest generation, Security audit, Refactor, Type hints) or chat workflows (3-bullet summary, Action plan, ELI5).
+- **🎨 Prompt Brain Visual Styles & Negative Templates:** Select visual style modifiers (Cinematic Lighting, 8K Photorealistic, Cyberpunk Neon, Dark Fantasy, Anime Ghibli) and negative templates.
+- **⏱️ Ops/MCP Latency Tracking & Vault Shortcuts:** Tool execution timer for MCP calls and quick-select relative vault path dropdown.
+- **📁 Outbox Viewer Tab:** Dedicated tab to list, preview, and clean up saved markdown session and prompt exports.
 
 ## Models
 
