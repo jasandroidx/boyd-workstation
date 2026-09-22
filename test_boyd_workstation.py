@@ -14,7 +14,7 @@ def test_build_app_structure_and_accessibility():
 
 
 def test_textbox_labels_and_events():
-    """Verify textboxes have explicit accessible labels and submit event triggers."""
+    """Verify textboxes have explicit accessible labels, submit event triggers, and copy buttons."""
     demo = boyd_workstation.build()
 
     # Inspect components inside the Blocks demo
@@ -27,6 +27,12 @@ def test_textbox_labels_and_events():
     assert "Code snippet or prompt" in labels
     assert "Knowledge search query" in labels
     assert "Skill hunt query" in labels
+
+    # Verify copy button enablement on output textboxes
+    brain_out = next(t for t in textboxes if t.label == "Expanded prompt (copy/paste)")
+    ops_out = next(t for t in textboxes if t.label == "MCP result")
+    assert brain_out.buttons == ["copy"]
+    assert ops_out.buttons == ["copy"]
 
     # Verify submit functions are attached to search/read textboxes
     listeners = list(demo.fns.values())
