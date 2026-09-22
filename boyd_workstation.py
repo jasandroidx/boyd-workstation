@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 import json
 import os
 import ssl
@@ -767,7 +768,10 @@ def brain_enhance(short: str, model: str, with_negatives: bool):
 # Real Ravenstack MCP (streamable-HTTP over Funnel HTTPS)
 # ---------------------------------------------------------------------------
 
+@lru_cache(maxsize=1)
 def _ssl_context() -> ssl.SSLContext:
+    # Memoize default SSL context to avoid ~40ms overhead of rebuilding
+    # context and reloading system certificates on every HTTPS request.
     return ssl.create_default_context()
 
 
