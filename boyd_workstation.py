@@ -45,7 +45,7 @@ def _require_mcp() -> str | None:
 
 
 # Installed tags we expose in UI (keep ≤7B on this 15Gi box by default list).
-MODELS = [
+DEFAULT_MODELS = [
     "qwen3:1.7b",
     "llama3.2:1b",
     "llama3.2:3b",
@@ -55,6 +55,9 @@ MODELS = [
     "qwen2.5:7b-instruct",
     "qwen2.5:7b",
 ]
+
+# For backwards compatibility with existing references
+MODELS = DEFAULT_MODELS
 
 # Per-tab recommended model = best local fit for that job (not the biggest).
 # Format: task -> (model_tag, one-line why)
@@ -66,21 +69,59 @@ RECOMMENDED = {
 }
 
 
-def model_dropdown_choices(task: str) -> list[tuple[str, str]]:
+def fetch_ollama_tags() -> list[str]:
+    """Query local Ollama /api/tags for dynamically available models."""
+    try:
+        req = urllib.request.Request(
+            f"{OLLAMA}/api/tags",
+            headers={"Accept": "application/json"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+            models_info = data.get("models", [])
+            tags = [
+                m.get("name") or m.get("model")
+                for m in models_info
+                if isinstance(m, dict) and (m.get("name") or m.get("model"))
+            ]
+            if tags:
+                # Merge with default list preserving order
+                combined = list(tags)
+                for d in DEFAULT_MODELS:
+                    if d not in combined:
+                        combined.append(d)
+                return combined
+    except Exception:  # noqa: BLE001
+        pass
+    return list(DEFAULT_MODELS)
+
+
+def model_dropdown_choices(task: str, dynamic_models: list[str] | None = None) -> list[tuple[str, str]]:
     """Gradio choices as (label, value). Recommended listed first with ★."""
     rec, _why = RECOMMENDED[task]
+    models = dynamic_models if dynamic_models is not None else fetch_ollama_tags()
     choices: list[tuple[str, str]] = []
     seen = set()
     # recommended first
-    if rec in MODELS:
+    if rec in models or rec in DEFAULT_MODELS:
         choices.append((f"★ {rec} — recommended", rec))
         seen.add(rec)
-    for m in MODELS:
+    for m in models:
         if m in seen:
             continue
         choices.append((m, m))
         seen.add(m)
     return choices
+
+
+def refresh_model_choices(task: str) -> gr.Dropdown:
+    """Refresh Ollama models dynamically and update Gradio dropdown."""
+    tags = fetch_ollama_tags()
+    choices = model_dropdown_choices(task, dynamic_models=tags)
+    rec, _ = RECOMMENDED[task]
+    val = rec if rec in tags or rec in DEFAULT_MODELS else (choices[0][1] if choices else "")
+    return gr.Dropdown(choices=choices, value=val)
 
 
 def recommended_value(task: str) -> str:
@@ -93,6 +134,32 @@ def recommended_note(task: str) -> str:
         f'<p class="panel-note">Recommended: <code>{rec}</code> — {why}. '
         "Change anytime.</p>"
     )
+
+
+# Code & Chat Quick Presets
+CHAT_PRESETS = {
+    "🎯 Summarize in 3 Bullets": "Please summarize the main points in exactly 3 concise bullet points:\n\n",
+    "📋 Step-by-Step Action Plan": "Break down how to accomplish this into a clear, numbered step-by-step action plan:\n\n",
+    "🔍 ELI5 Plain Words": "Explain this concept plainly using simple everyday terms:\n\n",
+}
+
+CODE_PRESETS = {
+    "🧪 Generate Pytest Unit Tests": "Write comprehensive pytest unit tests (including edge cases and fixtures) for the following code:\n\n```python\n\n```",
+    "🔍 Security & Bug Audit": "Perform a line-by-line security and bug audit for the following code snippet. Highlight potential flaws and fix them:\n\n```python\n\n```",
+    "⚡ Refactor & Optimize": "Refactor the following code for high performance, readability, and clean Python practices:\n\n```python\n\n```",
+    "📝 Add Type Hints & Docstrings": "Add strict type annotations and docstrings to all functions and classes in the following code:\n\n```python\n\n```",
+}
+
+
+def apply_preset(current_text: str, preset_key: str, presets_dict: dict[str, str]) -> str:
+    """Combine selected preset with existing user text."""
+    prefix = presets_dict.get(preset_key, "")
+    if not prefix:
+        return current_text
+    current_text = (current_text or "").strip()
+    if not current_text:
+        return prefix
+    return f"{prefix}\n{current_text}"
 
 
 # Read-only allowlist for Ops buttons. Never include sitrep / project_sitrep /
@@ -131,9 +198,7 @@ MCP_BLOCKED = {
 
 
 # ---------------------------------------------------------------------------
-# Skill Hunter (ops lane) — ClawHub hunt / shortlist / export ONLY
-# Never installs. No OpenCode. No fortress writes.
-# Spec: radar HANDOFF addendum D (mesh-skill-hunter) — Gradio slice.
+# Outbox Exporters & Skill Hunter (ops lane)
 # ---------------------------------------------------------------------------
 
 CLAWHUB_BASE = os.environ.get("CLAWHUB_BASE", "https://clawhub.ai")
@@ -145,6 +210,58 @@ SHORTLIST_PATH = Path(
 )
 EXPORT_DIR = Path("/workspace/outbox")
 USER_TZ = ZoneInfo("America/Indiana/Petersburg")
+
+
+def export_session_to_outbox(history: list, task_name: str) -> str:
+    """Export conversation history to /workspace/outbox markdown file."""
+    clean_hist = _history_to_messages(history)
+    if not clean_hist:
+        return "No conversation history to export."
+
+    stamp = datetime.now(USER_TZ).strftime("%Y%m%d-%H%M%S")
+    out = EXPORT_DIR / f"SESSION-{task_name.upper()}-{stamp}.md"
+    lines = [
+        f"# Session Export — {task_name.title()} ({stamp})",
+        f"**Source:** Boyd Workstation ({task_name} tab)",
+        f"**Exported:** {_now_edits()}",
+        "",
+        "---",
+        "",
+    ]
+    for msg in clean_hist:
+        role = (msg.get("role") or "unknown").capitalize()
+        content = msg.get("content") or ""
+        lines.append(f"### {role}\n")
+        lines.append(content)
+        lines.append("\n---\n")
+
+    EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(lines))
+    return f"Exported session ({len(clean_hist)} messages) to `{out}`"
+
+
+def export_text_to_outbox(text: str, task_name: str) -> str:
+    """Export raw text output to /workspace/outbox markdown file."""
+    text = (text or "").strip()
+    if not text:
+        return "No content to export."
+
+    stamp = datetime.now(USER_TZ).strftime("%Y%m%d-%H%M%S")
+    out = EXPORT_DIR / f"EXPORT-{task_name.upper()}-{stamp}.md"
+    lines = [
+        f"# Content Export — {task_name.title()} ({stamp})",
+        f"**Source:** Boyd Workstation ({task_name} tab)",
+        f"**Exported:** {_now_edits()}",
+        "",
+        "---",
+        "",
+        text,
+        "",
+    ]
+    EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(lines))
+    return f"Exported content to `{out}`"
+
 
 # Soft mesh-fit hints (display only — Jason decides)
 _FIT_PLUS = (
@@ -940,7 +1057,7 @@ def build() -> gr.Blocks:
             gr.Markdown(
                 """
 # Boyd Workstation
-<div class="panel-note">Local Ollama gym · Chat / NPC / Code · Ops/MCP · Skill Hunter (ClawHub, no install) · v2.3 · Prompt Brain (Perchance-style enhance)</div>
+<div class="panel-note">Local Ollama gym · Chat / NPC / Code · Ops/MCP · Skill Hunter (ClawHub, no install) · v2.4 · Dynamic Models & Presets</div>
 """
             )
         with gr.Row(elem_id="link-bar"):
@@ -960,18 +1077,52 @@ def build() -> gr.Blocks:
                     '<p class="panel-note">General local chat. Good for practice prompts.</p>'
                 )
                 gr.HTML(recommended_note("chat"))
-                chat_model = gr.Dropdown(
-                    choices=model_dropdown_choices("chat"),
-                    value=recommended_value("chat"),
-                    label="Model",
-                )
+                with gr.Row():
+                    chat_model = gr.Dropdown(
+                        choices=model_dropdown_choices("chat"),
+                        value=recommended_value("chat"),
+                        label="Model",
+                        scale=4,
+                    )
+                    btn_refresh_chat_models = gr.Button("🔄 Refresh Models", scale=1)
+
                 chat = gr.Chatbot(height=420, label="Chat", layout="bubble")
+
+                with gr.Row():
+                    chat_preset = gr.Dropdown(
+                        choices=["(Select Quick Prompt Preset...)"] + list(CHAT_PRESETS.keys()),
+                        value="(Select Quick Prompt Preset...)",
+                        label="Quick Presets",
+                        scale=3,
+                    )
+                    btn_export_chat = gr.Button("💾 Export Session to Outbox", scale=2)
+
+                chat_export_status = gr.Markdown(value="", visible=True)
+
                 chat_in = gr.Textbox(
                     label="Chat message",
                     placeholder="Ask anything…",
                     show_label=False,
                     submit_btn="Send",
                 )
+
+                btn_refresh_chat_models.click(
+                    lambda: refresh_model_choices("chat"),
+                    outputs=chat_model,
+                )
+
+                chat_preset.change(
+                    lambda current, key: apply_preset(current, key, CHAT_PRESETS),
+                    inputs=[chat_in, chat_preset],
+                    outputs=chat_in,
+                )
+
+                btn_export_chat.click(
+                    lambda h: export_session_to_outbox(h, "chat"),
+                    inputs=chat,
+                    outputs=chat_export_status,
+                )
+
                 chat_in.submit(chat_respond, [chat_in, chat, chat_model], [chat]).then(
                     lambda: "", None, chat_in
                 )
@@ -981,11 +1132,15 @@ def build() -> gr.Blocks:
                     '<p class="panel-note">Keep “feel alive” sandbox. Short in-world lines.</p>'
                 )
                 gr.HTML(recommended_note("npc"))
-                npc_model = gr.Dropdown(
-                    choices=model_dropdown_choices("npc"),
-                    value=recommended_value("npc"),
-                    label="Model",
-                )
+                with gr.Row():
+                    npc_model = gr.Dropdown(
+                        choices=model_dropdown_choices("npc"),
+                        value=recommended_value("npc"),
+                        label="Model",
+                        scale=4,
+                    )
+                    btn_refresh_npc_models = gr.Button("🔄 Refresh Models", scale=1)
+
                 voice = gr.Radio(
                     choices=list(NPC_VOICES.keys()),
                     value="Tavern keep",
@@ -998,6 +1153,12 @@ def build() -> gr.Blocks:
                     show_label=False,
                     submit_btn="Send",
                 )
+
+                btn_refresh_npc_models.click(
+                    lambda: refresh_model_choices("npc"),
+                    outputs=npc_model,
+                )
+
                 npc_in.submit(npc_respond, [npc_in, npc, npc_model, voice], [npc]).then(
                     lambda: "", None, npc_in
                 )
@@ -1007,12 +1168,28 @@ def build() -> gr.Blocks:
                     '<p class="panel-note">Coding coach. Paste a snippet or ask what’s wrong / explain this.</p>'
                 )
                 gr.HTML(recommended_note("code"))
-                code_model = gr.Dropdown(
-                    choices=model_dropdown_choices("code"),
-                    value=recommended_value("code"),
-                    label="Model",
-                )
+                with gr.Row():
+                    code_model = gr.Dropdown(
+                        choices=model_dropdown_choices("code"),
+                        value=recommended_value("code"),
+                        label="Model",
+                        scale=4,
+                    )
+                    btn_refresh_code_models = gr.Button("🔄 Refresh Models", scale=1)
+
                 code = gr.Chatbot(height=420, label="Code", layout="bubble")
+
+                with gr.Row():
+                    code_preset = gr.Dropdown(
+                        choices=["(Select Quick Coding Preset...)"] + list(CODE_PRESETS.keys()),
+                        value="(Select Quick Coding Preset...)",
+                        label="Coding Presets",
+                        scale=3,
+                    )
+                    btn_export_code = gr.Button("💾 Export Code Session to Outbox", scale=2)
+
+                code_export_status = gr.Markdown(value="", visible=True)
+
                 code_in = gr.Textbox(
                     label="Code snippet or prompt",
                     placeholder="Paste code or ask a coding question…",
@@ -1020,6 +1197,24 @@ def build() -> gr.Blocks:
                     show_label=False,
                     submit_btn="Send",
                 )
+
+                btn_refresh_code_models.click(
+                    lambda: refresh_model_choices("code"),
+                    outputs=code_model,
+                )
+
+                code_preset.change(
+                    lambda current, key: apply_preset(current, key, CODE_PRESETS),
+                    inputs=[code_in, code_preset],
+                    outputs=code_in,
+                )
+
+                btn_export_code.click(
+                    lambda h: export_session_to_outbox(h, "code"),
+                    inputs=code,
+                    outputs=code_export_status,
+                )
+
                 code_in.submit(code_respond, [code_in, code, code_model], [code]).then(
                     lambda: "", None, code_in
                 )
@@ -1045,6 +1240,8 @@ Read-only allowlist only. Does <strong>not</strong> call <code>sitrep</code> /
                     btn_init = gr.Button("Initialize", variant="secondary")
                     btn_health = gr.Button("MCP /health", variant="secondary")
                     btn_sitrep = gr.Button("Fast sitrep", variant="primary")
+                    btn_export_ops = gr.Button("💾 Export Output", variant="secondary")
+                ops_export_status = gr.Markdown(value="", visible=True)
                 with gr.Row():
                     btn_oc = gr.Button("openclaw_health")
                     btn_rc = gr.Button("reclaw_health")
@@ -1078,6 +1275,11 @@ Read-only allowlist only. Does <strong>not</strong> call <code>sitrep</code> /
                     )
                     btn_kq = gr.Button("Search", scale=1)
 
+                btn_export_ops.click(
+                    lambda t: export_text_to_outbox(t, "ops"),
+                    inputs=ops_out,
+                    outputs=ops_export_status,
+                )
                 btn_init.click(mcp_initialize, outputs=ops_out)
                 btn_health.click(mcp_health_probe, outputs=ops_out)
                 btn_sitrep.click(mcp_fast_sitrep, outputs=ops_out)
@@ -1103,23 +1305,44 @@ Read-only allowlist only. Does <strong>not</strong> call <code>sitrep</code> /
                     "Local Ollama only (no cloud). Paste the result into Filth Blast / art-ig / any SD UI.</p>"
                 )
                 gr.HTML(recommended_note("brain"))
-                brain_model = gr.Dropdown(
-                    choices=model_dropdown_choices("brain"),
-                    value=recommended_value("brain"),
-                    label="Model",
-                )
+                with gr.Row():
+                    brain_model = gr.Dropdown(
+                        choices=model_dropdown_choices("brain"),
+                        value=recommended_value("brain"),
+                        label="Model",
+                        scale=4,
+                    )
+                    btn_refresh_brain_models = gr.Button("🔄 Refresh Models", scale=1)
+
                 brain_in = gr.Textbox(
                     label="Short idea",
                     lines=3,
                     placeholder="e.g. Sonya on her knees POV deepthroat hate glare locker…",
                 )
                 brain_neg = gr.Checkbox(label="Also write a NEGATIVE: block", value=True)
-                btn_brain = gr.Button("🧠 Enhance prompt", variant="primary")
+                with gr.Row():
+                    btn_brain = gr.Button("🧠 Enhance prompt", variant="primary", scale=3)
+                    btn_export_brain = gr.Button("💾 Export Prompt to Outbox", scale=2)
+
+                brain_export_status = gr.Markdown(value="", visible=True)
+
                 brain_out = gr.Textbox(
                     label="Expanded prompt (copy/paste)",
                     lines=14,
                     max_lines=28,
                 )
+
+                btn_refresh_brain_models.click(
+                    lambda: refresh_model_choices("brain"),
+                    outputs=brain_model,
+                )
+
+                btn_export_brain.click(
+                    lambda t: export_text_to_outbox(t, "brain"),
+                    inputs=brain_out,
+                    outputs=brain_export_status,
+                )
+
                 btn_brain.click(
                     brain_enhance,
                     inputs=[brain_in, brain_model, brain_neg],
@@ -1184,7 +1407,7 @@ No OpenCode. Shortlist file: <code>{SHORTLIST_PATH}</code>.
                 btn_export.click(skill_export_handoff, outputs=hunt_out)
 
         gr.Markdown(
-            '<p class="panel-note">v2.3 · Prompt Brain + per-tab ★ models · Ops MCP + Skill Hunter (ClawHub hunt/shortlist/export, no install) · no fake dispatch.</p>'
+            '<p class="panel-note">v2.4 · Dynamic Ollama Discovery + Quick Presets + Session Outbox Export · Ops MCP + Skill Hunter.</p>'
         )
 
     return demo
