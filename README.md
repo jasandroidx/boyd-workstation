@@ -1,6 +1,6 @@
 # Boyd Workstation
 
-Local Gradio shell for Jason Boyd’s Grok Bot VM: **Chat / NPC / Code / Ops·MCP / Skill Hunter**.
+Local Gradio shell for Jason Boyd’s Grok Bot VM: **Chat / NPC / Code / Ops·MCP / Prompt Brain / Skill Hunter**.
 
 Runs against **local Ollama** (no cloud chat quota). Ops talks to a ReClaw/Ravenstack MCP URL you configure. Skill Hunter searches [ClawHub](https://clawhub.ai) and **never auto-installs**.
 
@@ -42,11 +42,18 @@ tailscale serve --bg 7860
 
 | Tab | Uses | Notes |
 |-----|------|--------|
-| Chat | Local Ollama | ★ recommended: `qwen3:4b` |
-| NPC | Local Ollama | ★ recommended: `phi4-mini:latest` |
-| Code | Local Ollama | ★ recommended: `qwen2.5:7b-instruct` |
-| Ops / MCP | MCP HTTPS | Read-only allowlist; set `MCP_URL` |
+| Chat | Local Ollama | ★ recommended: `qwen3:4b` · Dynamic model discovery & Quick Presets |
+| NPC | Local Ollama | ★ recommended: `phi4-mini:latest` · Dynamic model discovery |
+| Code | Local Ollama | ★ recommended: `qwen2.5:7b-instruct` · Coding presets & Outbox Export |
+| Ops / MCP | MCP HTTPS | Read-only allowlist; set `MCP_URL` · Output Export |
+| Prompt Brain | Local Ollama | Perchance-style image prompt expander & Outbox Export |
 | Skill Hunter | ClawHub public API | Hunt / shortlist / export — **no install** |
+
+## Features & Additions
+
+- **🔄 Live Ollama Model Discovery:** Click *Refresh Models* in Chat, NPC, Code, or Prompt Brain tabs to dynamically query local Ollama (`/api/tags`) and list any pulled model.
+- **⚡ Quick Prompt & Coding Presets:** Select preset templates for common coding workflows (Pytest generation, Security audit, Refactor, Type hints) or chat workflows (3-bullet summary, Action plan, ELI5).
+- **💾 Session Outbox Export:** Export chat & code conversation histories or expanded image prompts directly to `/workspace/outbox/*.md` with one click.
 
 ## Models
 
