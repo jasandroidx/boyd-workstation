@@ -41,6 +41,12 @@ def test_textbox_labels_and_events():
     assert (vault_box._id, "submit") in targets
     assert (skill_ref._id, "submit") in targets
 
+    # Verify copy buttons are enabled on output textboxes
+    ops_out = next(t for t in textboxes if t.label == "MCP result")
+    brain_out = next(t for t in textboxes if t.label == "Expanded prompt (copy/paste)")
+    assert ops_out.buttons == ["copy"]
+    assert brain_out.buttons == ["copy"]
+
 
 def test_fetch_ollama_tags_success():
     """Test fetching model tags from simulated Ollama /api/tags endpoint."""
