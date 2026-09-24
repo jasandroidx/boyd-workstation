@@ -1239,6 +1239,7 @@ Read-only allowlist only. Does <strong>not</strong> call <code>sitrep</code> /
                     label="MCP result",
                     lines=22,
                     max_lines=40,
+                    buttons=["copy"],
                 )
                 with gr.Row():
                     btn_init = gr.Button("Initialize", variant="secondary")
@@ -1334,6 +1335,7 @@ Read-only allowlist only. Does <strong>not</strong> call <code>sitrep</code> /
                     label="Expanded prompt (copy/paste)",
                     lines=14,
                     max_lines=28,
+                    buttons=["copy"],
                 )
 
                 btn_refresh_brain_models.click(

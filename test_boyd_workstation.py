@@ -42,6 +42,18 @@ def test_textbox_labels_and_events():
     assert (skill_ref._id, "submit") in targets
 
 
+def test_textbox_copy_buttons():
+    """Verify that output textboxes (MCP result and Prompt Brain) have copy buttons enabled."""
+    demo = boyd_workstation.build()
+    textboxes = [c for c in demo.blocks.values() if isinstance(c, gr.Textbox)]
+
+    ops_box = next(t for t in textboxes if t.label == "MCP result")
+    brain_box = next(t for t in textboxes if t.label == "Expanded prompt (copy/paste)")
+
+    assert ops_box.buttons == ["copy"]
+    assert brain_box.buttons == ["copy"]
+
+
 def test_fetch_ollama_tags_success():
     """Test fetching model tags from simulated Ollama /api/tags endpoint."""
     mock_payload = json.dumps({
