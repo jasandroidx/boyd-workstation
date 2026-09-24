@@ -56,7 +56,7 @@ def test_fetch_ollama_tags_success():
     mock_resp.__enter__.return_value = mock_resp
 
     with patch("urllib.request.urlopen", return_value=mock_resp):
-        tags = boyd_workstation.fetch_ollama_tags()
+        tags = boyd_workstation.fetch_ollama_tags(force_refresh=True)
         assert "deepseek-coder:6.7b" in tags
         assert "mistral:7b" in tags
         # Should also include default models
@@ -66,8 +66,48 @@ def test_fetch_ollama_tags_success():
 def test_fetch_ollama_tags_fallback():
     """Test fallback to default models if Ollama /api/tags is unreachable."""
     with patch("urllib.request.urlopen", side_effect=Exception("Connection refused")):
-        tags = boyd_workstation.fetch_ollama_tags()
+        tags = boyd_workstation.fetch_ollama_tags(force_refresh=True)
         assert tags == boyd_workstation.DEFAULT_MODELS
+
+
+def test_fetch_ollama_tags_ttl_caching():
+    """Test TTL caching and force_refresh behavior in fetch_ollama_tags."""
+    mock_payload_1 = json.dumps({"models": [{"name": "model-v1:latest"}]}).encode("utf-8")
+    mock_resp_1 = MagicMock()
+    mock_resp_1.read.return_value = mock_payload_1
+    mock_resp_1.__enter__.return_value = mock_resp_1
+
+    mock_payload_2 = json.dumps({"models": [{"name": "model-v2:latest"}]}).encode("utf-8")
+    mock_resp_2 = MagicMock()
+    mock_resp_2.read.return_value = mock_payload_2
+    mock_resp_2.__enter__.return_value = mock_resp_2
+
+    with patch("urllib.request.urlopen", side_effect=[mock_resp_1, mock_resp_2]) as mock_url:
+        # First call fetches from network
+        tags1 = boyd_workstation.fetch_ollama_tags(force_refresh=True)
+        assert "model-v1:latest" in tags1
+        assert mock_url.call_count == 1
+
+        # Second call within TTL reuses cached result without calling urlopen
+        tags2 = boyd_workstation.fetch_ollama_tags(force_refresh=False)
+        assert "model-v1:latest" in tags2
+        assert mock_url.call_count == 1
+
+        # Force refresh bypasses cache and queries network
+        tags3 = boyd_workstation.fetch_ollama_tags(force_refresh=True)
+        assert "model-v2:latest" in tags3
+        assert mock_url.call_count == 2
+
+
+def test_mcp_fast_sitrep_ordering():
+    """Test mcp_fast_sitrep executes and formats tools in defined order."""
+    with patch("boyd_workstation.mcp_tool_call", side_effect=lambda name, args, timeout: f"mock_out_{name}"):
+        res = boyd_workstation.mcp_fast_sitrep()
+        assert "# Fast sitrep" in res
+        assert "## openclaw_health\nmock_out_openclaw_health" in res
+        assert "## pipeline_status\nmock_out_pipeline_status" in res
+        # openclaw_health heading should appear before pipeline_status heading
+        assert res.find("## openclaw_health") < res.find("## pipeline_status")
 
 
 def test_model_dropdown_choices_and_refresh():
