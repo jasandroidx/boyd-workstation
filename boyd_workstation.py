@@ -69,9 +69,18 @@ RECOMMENDED = {
     "brain": ("qwen3:4b", "Best local expand — short prompt → ultra-detailed"),
 }
 
+_OLLAMA_TAGS_CACHE: tuple[float, list[str]] = (0.0, [])
+_OLLAMA_CACHE_TTL = 10.0  # seconds; memoizes tags across rapid consecutive dropdown builds
 
-def fetch_ollama_tags() -> list[str]:
-    """Query local Ollama /api/tags for dynamically available models."""
+
+def fetch_ollama_tags(force_refresh: bool = False) -> list[str]:
+    """Query local Ollama /api/tags for dynamically available models with short TTL caching."""
+    global _OLLAMA_TAGS_CACHE
+    now = time.monotonic()
+    last_time, cached_tags = _OLLAMA_TAGS_CACHE
+    if not force_refresh and cached_tags and (now - last_time < _OLLAMA_CACHE_TTL):
+        return list(cached_tags)
+
     try:
         req = urllib.request.Request(
             f"{OLLAMA}/api/tags",
@@ -92,10 +101,13 @@ def fetch_ollama_tags() -> list[str]:
                 for d in DEFAULT_MODELS:
                     if d not in combined:
                         combined.append(d)
-                return combined
+                _OLLAMA_TAGS_CACHE = (now, combined)
+                return list(combined)
     except Exception:  # noqa: BLE001
         pass
-    return list(DEFAULT_MODELS)
+    fallback = list(DEFAULT_MODELS)
+    _OLLAMA_TAGS_CACHE = (now, fallback)
+    return list(fallback)
 
 
 def model_dropdown_choices(task: str, dynamic_models: list[str] | None = None) -> list[tuple[str, str]]:
@@ -118,7 +130,7 @@ def model_dropdown_choices(task: str, dynamic_models: list[str] | None = None) -
 
 def refresh_model_choices(task: str) -> gr.Dropdown:
     """Refresh Ollama models dynamically and update Gradio dropdown."""
-    tags = fetch_ollama_tags()
+    tags = fetch_ollama_tags(force_refresh=True)
     choices = model_dropdown_choices(task, dynamic_models=tags)
     rec, _ = RECOMMENDED[task]
     val = rec if rec in tags or rec in DEFAULT_MODELS else (choices[0][1] if choices else "")
@@ -1026,19 +1038,14 @@ def mcp_fast_sitrep() -> str:
             return t, f"ERR {e}"
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        futs = [pool.submit(_one, t) for t in tools]
-        for fut in concurrent.futures.as_completed(futs):
-            name, text = fut.result()
-            parts.append(f"## {name}\n{text}\n")
+        # pool.map preserves exact ordering of tools cleanly without string parsing
+        results = dict(pool.map(_one, tools))
 
-    # stable order for display
-    by_name = {}
-    for p in parts[1:]:
-        # "## name\n..."
-        line = p.split("\n", 1)[0]
-        by_name[line[3:].strip()] = p
-    ordered = [parts[0]] + [by_name[t] for t in tools if t in by_name]
-    return "\n".join(ordered)[:20000]
+    for t in tools:
+        if t in results:
+            parts.append(f"## {t}\n{results[t]}\n")
+
+    return "\n".join(parts)[:20000]
 
 
 def mcp_vault_read(path: str) -> str:
@@ -1056,6 +1063,9 @@ def mcp_knowledge_query(query: str) -> str:
 
 
 def build() -> gr.Blocks:
+    # Fetch Ollama tags once during UI build to avoid redundant network calls across tabs
+    tags = fetch_ollama_tags()
+
     with gr.Blocks(title="Boyd Workstation") as demo:
         with gr.Row(elem_id="title-row"):
             gr.Markdown(
@@ -1083,7 +1093,7 @@ def build() -> gr.Blocks:
                 gr.HTML(recommended_note("chat"))
                 with gr.Row():
                     chat_model = gr.Dropdown(
-                        choices=model_dropdown_choices("chat"),
+                        choices=model_dropdown_choices("chat", dynamic_models=tags),
                         value=recommended_value("chat"),
                         label="Model",
                         scale=4,
@@ -1138,7 +1148,7 @@ def build() -> gr.Blocks:
                 gr.HTML(recommended_note("npc"))
                 with gr.Row():
                     npc_model = gr.Dropdown(
-                        choices=model_dropdown_choices("npc"),
+                        choices=model_dropdown_choices("npc", dynamic_models=tags),
                         value=recommended_value("npc"),
                         label="Model",
                         scale=4,
@@ -1174,7 +1184,7 @@ def build() -> gr.Blocks:
                 gr.HTML(recommended_note("code"))
                 with gr.Row():
                     code_model = gr.Dropdown(
-                        choices=model_dropdown_choices("code"),
+                        choices=model_dropdown_choices("code", dynamic_models=tags),
                         value=recommended_value("code"),
                         label="Model",
                         scale=4,
@@ -1311,7 +1321,7 @@ Read-only allowlist only. Does <strong>not</strong> call <code>sitrep</code> /
                 gr.HTML(recommended_note("brain"))
                 with gr.Row():
                     brain_model = gr.Dropdown(
-                        choices=model_dropdown_choices("brain"),
+                        choices=model_dropdown_choices("brain", dynamic_models=tags),
                         value=recommended_value("brain"),
                         label="Model",
                         scale=4,
