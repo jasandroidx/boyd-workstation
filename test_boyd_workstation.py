@@ -27,6 +27,14 @@ def test_textbox_labels_and_events():
     assert "Code snippet or prompt" in labels
     assert "Knowledge search query" in labels
     assert "Skill hunt query" in labels
+    assert "Short idea" in labels
+    assert "Note" in labels
+
+    # Verify output textboxes have copy buttons enabled
+    ops_out = next(t for t in textboxes if t.label == "MCP result")
+    brain_out = next(t for t in textboxes if t.label == "Expanded prompt (copy/paste)")
+    assert ops_out.buttons == ["copy"]
+    assert brain_out.buttons == ["copy"]
 
     # Verify submit functions are attached to search/read textboxes
     listeners = list(demo.fns.values())
