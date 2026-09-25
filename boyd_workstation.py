@@ -1056,6 +1056,10 @@ def mcp_knowledge_query(query: str) -> str:
 
 
 def build() -> gr.Blocks:
+    # Fetch Ollama model tags once during UI initialization to prevent redundant
+    # HTTP requests across multiple dropdown model choice evaluations (~75% reduction).
+    tags = fetch_ollama_tags()
+
     with gr.Blocks(title="Boyd Workstation") as demo:
         with gr.Row(elem_id="title-row"):
             gr.Markdown(
@@ -1083,7 +1087,7 @@ def build() -> gr.Blocks:
                 gr.HTML(recommended_note("chat"))
                 with gr.Row():
                     chat_model = gr.Dropdown(
-                        choices=model_dropdown_choices("chat"),
+                        choices=model_dropdown_choices("chat", dynamic_models=tags),
                         value=recommended_value("chat"),
                         label="Model",
                         scale=4,
@@ -1138,7 +1142,7 @@ def build() -> gr.Blocks:
                 gr.HTML(recommended_note("npc"))
                 with gr.Row():
                     npc_model = gr.Dropdown(
-                        choices=model_dropdown_choices("npc"),
+                        choices=model_dropdown_choices("npc", dynamic_models=tags),
                         value=recommended_value("npc"),
                         label="Model",
                         scale=4,
@@ -1174,7 +1178,7 @@ def build() -> gr.Blocks:
                 gr.HTML(recommended_note("code"))
                 with gr.Row():
                     code_model = gr.Dropdown(
-                        choices=model_dropdown_choices("code"),
+                        choices=model_dropdown_choices("code", dynamic_models=tags),
                         value=recommended_value("code"),
                         label="Model",
                         scale=4,
@@ -1311,7 +1315,7 @@ Read-only allowlist only. Does <strong>not</strong> call <code>sitrep</code> /
                 gr.HTML(recommended_note("brain"))
                 with gr.Row():
                     brain_model = gr.Dropdown(
-                        choices=model_dropdown_choices("brain"),
+                        choices=model_dropdown_choices("brain", dynamic_models=tags),
                         value=recommended_value("brain"),
                         label="Model",
                         scale=4,
