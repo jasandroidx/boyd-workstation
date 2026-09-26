@@ -717,6 +717,10 @@ CSS = """
   outline-offset: 2px;
   border-radius: 2px;
 }
+button:focus-visible {
+  outline: 2px solid #3dffa8 !important;
+  outline-offset: 2px !important;
+}
 .panel-note {
   opacity: 0.75;
   font-size: 0.85rem;
@@ -1239,6 +1243,7 @@ Read-only allowlist only. Does <strong>not</strong> call <code>sitrep</code> /
                     label="MCP result",
                     lines=22,
                     max_lines=40,
+                    buttons=["copy"],
                 )
                 with gr.Row():
                     btn_init = gr.Button("Initialize", variant="secondary")
@@ -1334,6 +1339,7 @@ Read-only allowlist only. Does <strong>not</strong> call <code>sitrep</code> /
                     label="Expanded prompt (copy/paste)",
                     lines=14,
                     max_lines=28,
+                    buttons=["copy"],
                 )
 
                 btn_refresh_brain_models.click(
@@ -1406,6 +1412,7 @@ No OpenCode. Shortlist file: <code>{SHORTLIST_PATH}</code>.
                 btn_inspect.click(skill_inspect, inputs=skill_ref, outputs=hunt_out)
                 skill_ref.submit(skill_inspect, inputs=skill_ref, outputs=hunt_out)
                 btn_add.click(shortlist_add, inputs=[skill_ref, skill_note], outputs=short_out)
+                skill_note.submit(shortlist_add, inputs=[skill_ref, skill_note], outputs=short_out)
                 btn_rm.click(shortlist_remove, inputs=skill_ref, outputs=short_out)
                 btn_list.click(shortlist_show, outputs=short_out)
                 btn_export.click(skill_export_handoff, outputs=hunt_out)
