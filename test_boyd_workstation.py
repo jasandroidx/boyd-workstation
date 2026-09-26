@@ -113,3 +113,15 @@ def test_export_session_and_text_to_outbox(tmp_path):
         text_files = list(tmp_path.glob("EXPORT-BRAIN-*.md"))
         assert len(text_files) == 1
         assert "Sample expanded prompt content" in text_files[0].read_text()
+
+
+def test_mcp_fast_sitrep():
+    """Test fast sitrep concurrency and output formatting."""
+    def mock_tool_call(tool_name, args, timeout=60):
+        return f"Status OK for {tool_name}"
+
+    with patch("boyd_workstation.mcp_tool_call", side_effect=mock_tool_call):
+        res = boyd_workstation.mcp_fast_sitrep()
+        assert "# Fast sitrep (allowlisted)" in res
+        assert "## openclaw_health\nStatus OK for openclaw_health" in res
+        assert "## pipeline_status\nStatus OK for pipeline_status" in res
