@@ -1017,7 +1017,6 @@ def mcp_fast_sitrep() -> str:
         "pending_gates",
         "pipeline_status",
     ]
-    parts: list[str] = [f"# Fast sitrep (allowlisted)\nMCP: `{MCP_URL}`\n"]
 
     def _one(t: str) -> tuple[str, str]:
         try:
@@ -1025,20 +1024,17 @@ def mcp_fast_sitrep() -> str:
         except Exception as e:  # noqa: BLE001
             return t, f"ERR {e}"
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-        futs = [pool.submit(_one, t) for t in tools]
-        for fut in concurrent.futures.as_completed(futs):
-            name, text = fut.result()
-            parts.append(f"## {name}\n{text}\n")
+    # Optimization: set max_workers=len(tools) to execute all fan-out requests in parallel
+    # without queuing delays. Use pool.map to automatically preserve exact input ordering
+    # without string-parsing or dictionary reordering overhead.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(tools)) as pool:
+        results = list(pool.map(_one, tools))
 
-    # stable order for display
-    by_name = {}
-    for p in parts[1:]:
-        # "## name\n..."
-        line = p.split("\n", 1)[0]
-        by_name[line[3:].strip()] = p
-    ordered = [parts[0]] + [by_name[t] for t in tools if t in by_name]
-    return "\n".join(ordered)[:20000]
+    parts: list[str] = [f"# Fast sitrep (allowlisted)\nMCP: `{MCP_URL}`\n"]
+    for name, text in results:
+        parts.append(f"## {name}\n{text}\n")
+
+    return "\n".join(parts)[:20000]
 
 
 def mcp_vault_read(path: str) -> str:

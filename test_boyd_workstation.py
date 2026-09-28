@@ -113,3 +113,30 @@ def test_export_session_and_text_to_outbox(tmp_path):
         text_files = list(tmp_path.glob("EXPORT-BRAIN-*.md"))
         assert len(text_files) == 1
         assert "Sample expanded prompt content" in text_files[0].read_text()
+
+
+def test_mcp_fast_sitrep():
+    """Test mcp_fast_sitrep parallel execution and deterministic output ordering."""
+    def mock_tool_call(name, args=None, timeout=60):
+        return f"status: ok for {name}"
+
+    with patch("boyd_workstation.mcp_tool_call", side_effect=mock_tool_call):
+        res = boyd_workstation.mcp_fast_sitrep()
+        assert "# Fast sitrep (allowlisted)" in res
+        assert "## openclaw_health\nstatus: ok for openclaw_health" in res
+        assert "## reclaw_health\nstatus: ok for reclaw_health" in res
+        assert "## stack_health\nstatus: ok for stack_health" in res
+        assert "## dashboard_status\nstatus: ok for dashboard_status" in res
+        assert "## connector_status\nstatus: ok for connector_status" in res
+        assert "## pending_gates\nstatus: ok for pending_gates" in res
+        assert "## pipeline_status\nstatus: ok for pipeline_status" in res
+
+        # Verify ordering of sections matches tool list order
+        idx_oc = res.find("## openclaw_health")
+        idx_rc = res.find("## reclaw_health")
+        idx_st = res.find("## stack_health")
+        idx_db = res.find("## dashboard_status")
+        idx_cn = res.find("## connector_status")
+        idx_pg = res.find("## pending_gates")
+        idx_pl = res.find("## pipeline_status")
+        assert idx_oc < idx_rc < idx_st < idx_db < idx_cn < idx_pg < idx_pl
