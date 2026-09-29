@@ -41,6 +41,7 @@ def test_textbox_labels_and_events():
     assert (vault_box._id, "submit") in targets
     assert (skill_ref._id, "submit") in targets
 
+    # Verify copy buttons are configured on output textboxes
     # Verify copy buttons on output textboxes
     ops_out = next(t for t in textboxes if t.label == "MCP result")
     brain_out = next(t for t in textboxes if t.label == "Expanded prompt (copy/paste)")
